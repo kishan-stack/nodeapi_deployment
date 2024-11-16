@@ -126,6 +126,10 @@ app.delete("/deleteAllUsers", async (req, res) => {
     }
 });
 
+app.get("/",async(req,res)=>{
+    res.send("hello from deployed app")
+})
+
 app.get("/recommendations", async (req, res) => {
     const { email } = req.query;
 
