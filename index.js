@@ -2,14 +2,20 @@
 
 import express from "express";
 import driver from "./conifg/db.js";
+import cors from "cors"
 const app = express();
 app.use(express.json());
+app.use(cors({
+    origin: 'http://localhost:3000',  // Change this to the exact origin you want to allow
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],  // Allowed HTTP methods
+    allowedHeaders: ['Content-Type', 'Authorization'],  // Allowed headers
+  }));
 
-app.post("/users", async (req, res) => {
-    const { firstname, lastname, email, skills, college, department, academicYear, location, interests } = req.body;
-
+app.post("/register", async (req, res) => {
+    const { firstName, lastName, email, skills, collegeName, departmentName, academicYear, location, interests } = req.body;
+    console.log(firstName,lastName,email,skills,collegeName,departmentName,academicYear,location,interests);
     // Validate input
-    if (!firstname || !lastname || !email || !skills || !Array.isArray(skills)) {
+    if (!firstName || !lastName || !email || !skills || !Array.isArray(skills)) {
         return res.status(400).json({ error: "Invalid input" });
     }
 
@@ -21,9 +27,9 @@ app.post("/users", async (req, res) => {
             // Merge the User node by email to ensure it exists and only one node is created
             const user = await tx.run(
                 `MERGE (u:User {email: $email})
-                 ON CREATE SET u.firstname = $firstname, u.lastname = $lastname
+                 ON CREATE SET u.firstName = $firstName, u.lastName = $lastName
                  RETURN u`,
-                { firstname, lastname, email }
+                { firstName, lastName, email }
             );
 
             // Get the user node that was created or matched
@@ -40,25 +46,25 @@ app.post("/users", async (req, res) => {
                 );
             }
 
-            // Handle college with STUDIED_IN relationship
-            if (college) {
+            // Handle collegeName with STUDIED_IN relationship
+            if (collegeName) {
                 await tx.run(
-                    `MERGE (c:College {name: $college})
+                    `MERGE (c:collegeName {name: $collegeName})
                      WITH c
                      MATCH (u:User {email: $email})
                      MERGE (u)-[:STUDIED_IN]->(c)`,
-                    { college, email }
+                    { collegeName, email }
                 );
             }
 
-            // Handle department with MAJORED_IN relationship
-            if (department) {
+            // Handle departmentName with MAJORED_IN relationship
+            if (departmentName) {
                 await tx.run(
-                    `MERGE (d:Department {name: $department})
+                    `MERGE (d:departmentName {name: $departmentName})
                      WITH d
                      MATCH (u:User {email: $email})
                      MERGE (u)-[:MAJORED_IN]->(d)`,
-                    { department, email }
+                    { departmentName, email }
                 );
             }
 
