@@ -8,9 +8,7 @@ const app = express();
 app.use(express.json());
 app.use(cors({
     origin: "*",  // Change this to the exact origin you want to allow
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],  // Allowed HTTP methods
-    allowedHeaders: ['Content-Type', 'Authorization'],  // Allowed headers
-  }));
+      }));
 
   app.post("/register", async (req, res) => {
     const { firstName, lastName, email, skills, collegeName, departmentName, academicYear, location, interests } = req.body;
@@ -24,16 +22,16 @@ app.use(cors({
 
     try {
         // Generate a unique 'sub' for the user (you can also use something from the auth service if available)
-        const sub = uuidv4();  // Generate unique sub for the user
+         // Generate unique sub for the user
 
         // Start a write transaction to ensure atomicity
         const userResult = await session.writeTransaction(async (tx) => {
             // Merge the User node by email to ensure it exists and only one node is created
             const user = await tx.run(
                 `MERGE (u:User {email: $email})
-                 ON CREATE SET u.firstName = $firstName, u.lastName = $lastName, u.sub = $sub
+                 ON CREATE SET u.firstName = $firstName, u.lastName = $lastName
                  RETURN u`,
-                { firstName, lastName, email, sub }
+                { firstName, lastName, email }
             );
 
             // Get the user node that was created or matched
@@ -124,26 +122,44 @@ app.use(cors({
 
 app.post("/auth/check-user", async (req, res) => {
     const { token } = req.body;
-    console.log("token: ",token);
-    try {
-      const decodedToken = jwt.decode(token);
-      const userSub = decodedToken.sub;
-  
-      const session = driver.session();
-      const query = `MATCH (u:User {sub: $sub}) RETURN u`;
-      const result = await session.run(query, { sub: userSub });
-      await session.close();
-  
-      if (result.records.length > 0) {
-        return res.status(200).json({ userExists: true });
-      }
-  
-      return res.status(200).json({ userExists: false });
-    } catch (error) {
-      console.error("Error checking user:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+
+    if (!token) {
+        return res.status(400).json({ error: "Token is required" });
     }
-  });
+
+    try {
+        // Decode the token
+        const decodedToken = jwt.decode(token);
+        if (!decodedToken || !decodedToken.sub) {
+            return res.status(400).json({ error: "Invalid token" });
+        }
+        const userSub = decodedToken.sub;
+        console.log("User Sub from Token:", userSub);
+
+        // Create Neo4j session
+        const session = driver.session();
+
+        // Run query to check if the user exists
+        const query = `MATCH (u:User {sub: $sub}) RETURN u`;
+        const result = await session.run(query, { sub: userSub });
+
+        console.log("Query Result:", result.records);
+
+        // Close session
+        await session.close();
+
+        // Check if user exists
+        if (result.records.length > 0) {
+            return res.status(200).json({ userExists: true });
+        }
+
+        return res.status(200).json({ userExists: false });
+    } catch (error) {
+        console.error("Error checking user:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
 app.delete("/deleteAllUsers", async (req, res) => {
     const session = driver.session();
     try {
@@ -157,6 +173,37 @@ app.delete("/deleteAllUsers", async (req, res) => {
         await session.close();
     }
 });
+
+app.get("/get-allusers", async (req, res) => {
+    const session = driver.session();
+
+    try {
+        // Query to get all users and their skills based on the HAS_SKILL relationship
+        const query = `
+            MATCH (u:User)-[:HAS_SKILL]->(s:Skill)
+            RETURN u.firstName AS firstName, u.lastName AS lastName, u.email AS email, collect(s.name) AS skills
+        `;
+
+        const result = await session.run(query);
+
+        // Extract the records
+        const usersWithSkills = result.records.map(record => ({
+            firstName: record.get("firstName"),
+            lastName: record.get("lastName"),
+            email: record.get("email"),
+            skills: record.get("skills")
+        }));
+
+        await session.close();
+
+        // Return the users with their skills
+        res.status(200).json(usersWithSkills);
+    } catch (error) {
+        console.error("Error fetching users and skills:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
 
 app.get("/",async(req,res)=>{
     res.send("hello from deployed app")
