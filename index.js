@@ -1,5 +1,5 @@
 // index.js
-
+import { v4 as uuid} from "uuid"
 import express from "express";
 import driver from "./conifg/db.js";
 import cors from "cors"
@@ -11,9 +11,9 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization'],  // Allowed headers
   }));
 
-app.post("/register", async (req, res) => {
+  app.post("/register", async (req, res) => {
     const { firstName, lastName, email, skills, collegeName, departmentName, academicYear, location, interests } = req.body;
-    console.log(firstName,lastName,email,skills,collegeName,departmentName,academicYear,location,interests);
+
     // Validate input
     if (!firstName || !lastName || !email || !skills || !Array.isArray(skills)) {
         return res.status(400).json({ error: "Invalid input" });
@@ -22,14 +22,17 @@ app.post("/register", async (req, res) => {
     const session = driver.session();
 
     try {
+        // Generate a unique 'sub' for the user (you can also use something from the auth service if available)
+        const sub = uuidv4();  // Generate unique sub for the user
+
         // Start a write transaction to ensure atomicity
         const userResult = await session.writeTransaction(async (tx) => {
             // Merge the User node by email to ensure it exists and only one node is created
             const user = await tx.run(
                 `MERGE (u:User {email: $email})
-                 ON CREATE SET u.firstName = $firstName, u.lastName = $lastName
+                 ON CREATE SET u.firstName = $firstName, u.lastName = $lastName, u.sub = $sub
                  RETURN u`,
-                { firstName, lastName, email }
+                { firstName, lastName, email, sub }
             );
 
             // Get the user node that was created or matched
@@ -49,7 +52,7 @@ app.post("/register", async (req, res) => {
             // Handle collegeName with STUDIED_IN relationship
             if (collegeName) {
                 await tx.run(
-                    `MERGE (c:collegeName {name: $collegeName})
+                    `MERGE (c:College {name: $collegeName})
                      WITH c
                      MATCH (u:User {email: $email})
                      MERGE (u)-[:STUDIED_IN]->(c)`,
@@ -60,7 +63,7 @@ app.post("/register", async (req, res) => {
             // Handle departmentName with MAJORED_IN relationship
             if (departmentName) {
                 await tx.run(
-                    `MERGE (d:departmentName {name: $departmentName})
+                    `MERGE (d:Department {name: $departmentName})
                      WITH d
                      MATCH (u:User {email: $email})
                      MERGE (u)-[:MAJORED_IN]->(d)`,
@@ -118,6 +121,28 @@ app.post("/register", async (req, res) => {
     }
 });
 
+app.post("/auth/check-user", async (req, res) => {
+    const { token } = req.body;
+  
+    try {
+      const decodedToken = jwt.decode(token);
+      const userSub = decodedToken.sub;
+  
+      const session = driver.session();
+      const query = `MATCH (u:User {sub: $sub}) RETURN u`;
+      const result = await session.run(query, { sub: userSub });
+      await session.close();
+  
+      if (result.records.length > 0) {
+        return res.status(200).json({ userExists: true });
+      }
+  
+      return res.status(200).json({ userExists: false });
+    } catch (error) {
+      console.error("Error checking user:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
 app.delete("/deleteAllUsers", async (req, res) => {
     const session = driver.session();
     try {
