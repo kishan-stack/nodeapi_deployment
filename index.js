@@ -2,11 +2,12 @@
 import { v4 as uuid} from "uuid"
 import express from "express";
 import driver from "./conifg/db.js";
+import jwt from "jsonwebtoken";
 import cors from "cors"
 const app = express();
 app.use(express.json());
 app.use(cors({
-    origin: 'http://localhost:3000',  // Change this to the exact origin you want to allow
+    origin: "*",  // Change this to the exact origin you want to allow
     methods: ['GET', 'POST', 'PUT', 'DELETE'],  // Allowed HTTP methods
     allowedHeaders: ['Content-Type', 'Authorization'],  // Allowed headers
   }));
@@ -123,7 +124,7 @@ app.use(cors({
 
 app.post("/auth/check-user", async (req, res) => {
     const { token } = req.body;
-  
+    console.log("token: ",token);
     try {
       const decodedToken = jwt.decode(token);
       const userSub = decodedToken.sub;
