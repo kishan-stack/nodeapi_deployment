@@ -122,43 +122,38 @@ app.use(cors({
 
 app.post("/auth/check-user", async (req, res) => {
     const { token } = req.body;
-
+  
     if (!token) {
-        return res.status(400).json({ error: "Token is required" });
+      return res.status(400).json({ error: "Token is required" });
     }
-
+    console.log(token);
     try {
-        // Decode the token
-        const decodedToken = jwt.decode(token);
-        if (!decodedToken || !decodedToken.sub) {
-            return res.status(400).json({ error: "Invalid token" });
-        }
-        const userSub = decodedToken.sub;
-        console.log("User Sub from Token:", userSub);
-
-        // Create Neo4j session
-        const session = driver.session();
-
-        // Run query to check if the user exists
-        const query = `MATCH (u:User {sub: $sub}) RETURN u`;
-        const result = await session.run(query, { sub: userSub });
-
-        console.log("Query Result:", result.records);
-
-        // Close session
-        await session.close();
-
-        // Check if user exists
-        if (result.records.length > 0) {
-            return res.status(200).json({ userExists: true });
-        }
-
-        return res.status(200).json({ userExists: false });
+      // Decode the token to extract the email
+      const {email }=token
+  
+      if (!email) {
+        return res.status(400).json({ error: "Invalid token" });
+      }
+  
+      // Query Neo4j for the user
+      const session = driver.session();
+      const query = `MATCH (u:User {email: $email}) RETURN u`;
+      const result = await session.run(query, { email: email });
+      session.close();
+  
+      if (result.records.length > 0) {
+        // User exists
+        return res.status(200).json({ userExists: true });
+      }
+  
+      // User does not exist
+      return res.status(200).json({ userExists: false });
     } catch (error) {
-        console.error("Error checking user:", error);
-        res.status(500).json({ error: "Internal Server Error" });
+      console.error("Error checking user:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
-});
+  });
+  
 
 app.delete("/deleteAllUsers", async (req, res) => {
     const session = driver.session();
