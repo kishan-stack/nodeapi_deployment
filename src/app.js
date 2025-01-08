@@ -25,5 +25,9 @@ import recommendationRouter from "./routes/recommendation.routes.js"
 app.use("/api/v1/testing", testingRouter);
 app.use("/api/v1/auth", userRouter);
 app.use("/api/v1/users",recommendationRouter);
+app.use("/",)
 
+app.get("/",(req,res)=>{
+    res.send("hello from deployed app");
+})
 export { app };
